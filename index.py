@@ -34,7 +34,12 @@ def create_index(lines):
     index - the inverted index (implemented through a Python dictionary) containing terms as keys and the corresponding
     list of documents where these keys appears in (and the positions) as values.
     """
+    tf = defaultdict(list) 
+    df = defaultdict(int)  
+    idf = defaultdict(float)
+
     index = defaultdict(list)
+    num_documents = len(lines)
     for line in lines:  # Remember, lines contain all documents: article-id | article-title | article-body
        
         line = json.loads(line)
@@ -52,64 +57,122 @@ def create_index(lines):
                
                 current_page_index[term] = [tweet_id, array('I', [position])]
 
+        norm = 0
+        for term, posting in current_page_index.items():
+            # posting will contain the list of positions for current term in current document.
+            # posting ==> [current_doc, [list of positions]]
+            # you can use it to infer the frequency of current term.
+            norm += len(posting[1]) ** 2
+        norm = math.sqrt(norm)
+
+        #calculate the tf(dividing the term frequency by the above computed norm) and df weights
+        for term, posting in current_page_index.items():
+            # append the tf for current term (tf = term frequency in current doc/norm)
+            tf[term].append(np.round(len(posting[1]) / norm, 4)) ## SEE formula (1) above
+            #increment the document frequency of current term (number of documents containing the current term)
+            df[term] += 1 # increment DF for current term
+
         #merge the current page index with the main index
         for term_page, posting_page in current_page_index.items():
             index[term_page].append(posting_page)
 
-        ## END CODE
+        # Compute IDF following the formula (3) above. HINT: use np.log
+        for term in df:
+            idf[term] = np.round(np.log(float(num_documents / df[term])), 4)
+    return index, tf, df, idf
 
-    return index
+def rank_documents(terms, docs, index, idf, tf):
+    """
+    Perform the ranking of the results of a search based on the tf-idf weights
 
-def vector_index(lines):
-    
-    """
-    input: list of paragraphs
-    output: dataframe mapping each paragraph to its embedding
-    """
-    # from sklearn.cluster import AgglomerativeClustering
-    embeddings = model.encode(lines)
-    df = pd.DataFrame(
-        {"tweet": lines[i]["id"], "vector_representation": embeddings[i]}
-        for i in range(len(embeddings))
-    )
-    return df
-def obtain_similarity(query, df, k):
-    """
-    arguments:
-        - query: word or sentence to compare
-        - df: dataframe mapping paragraphs to embeddings
-        - k: number of selected similar paragraphs
-    output: list of paragraphs relevant for the query and the position in the datframe at which they are
+    Argument:
+    terms -- list of query terms
+    docs -- list of documents, to rank, matching the query
+    index -- inverted index data structure
+    idf -- inverted document frequencies
+    tf -- term frequencies
+    title_index -- mapping between page id and page title
+
+    Returns:
+    Print the list of ranked documents
     """
 
-    query_embedding = model.encode(query)
-    df["similarity"] = df["vector_representation"].apply(
-        lambda x: cosine_similarity(x, query_embedding)
-    )
-    results = df.sort_values("similarity", ascending=False, ignore_index=True)
-    top_k = results["tweet"][1:k]
-    top_k = list(top_k)
-    ## Find positions of the top_k in df
-    positions = df.loc[df["tweet"].isin(top_k)].index
-    return top_k, positions
+    # I'm interested only on the element of the docVector corresponding to the query terms
+    # The remaining elements would become 0 when multiplied to the query_vector
+    doc_vectors = defaultdict(lambda: [0] * len(terms)) # I call doc_vectors[k] for a nonexistent key k, the key-value pair (k,[0]*len(terms)) will be automatically added to the dictionary
+    query_vector = [0] * len(terms)
 
-def calculate_tf_idf(index):
-    tf_idf_scores = {}
-    total_tweets = len(index.keys())
+    # compute the norm for the query tf
+    query_terms_count = collections.Counter(terms)  # get the frequency of each term in the query.
+    # Example: collections.Counter(["hello","hello","world"]) --> Counter({'hello': 2, 'world': 1})
+    #HINT: use when computing tf for query_vector
 
-    # Calculate IDF for each term
-    idf = {term: np.log(total_tweets / len(postings)) for term, postings in index.items()}
+    query_norm = la.norm(list(query_terms_count.values()))
 
-    # Calculate TF-IDF scores for each term in each tweet
-    for term, postings in index.items():
-        tf_idf_scores[term] = {}
-        for posting in postings:
-            tweet_id, positions = posting[0], posting[1]
-            tf = len(positions)
-            tf_idf = tf * idf[term]
-            tf_idf_scores[term][tweet_id] = tf_idf
+    for termIndex, term in enumerate(terms):  #termIndex is the index of the term in the query
+        if term not in index:
+            continue
 
-    return tf_idf_scores
+        # TODO: check how to vectorize the query
+        # query_vector[termIndex]=idf[term]  # original
+        ## Compute tf*idf(normalize TF as done with documents)
+        query_vector[termIndex] = query_terms_count[term] / query_norm * idf[term]
+
+        # Generate doc_vectors for matching docs
+        for doc_index, (doc, postings) in enumerate(index[term]):
+            # Example of [doc_index, (doc, postings)]
+            # 0 (26, array('I', [1, 4, 12, 15, 22, 28, 32, 43, 51, 68, 333, 337]))
+            # 1 (33, array('I', [26, 33, 57, 71, 87, 104, 109]))
+            # term is in doc 26 in positions 1,4, .....
+            # term is in doc 33 in positions 26,33, .....
+
+            #tf[term][0] will contain the tf of the term "term" in the doc 26
+            if doc in docs:
+                doc_vectors[doc][termIndex] = tf[term][doc_index] * idf[term]  # TODO: check if multiply for idf
+
+    # Calculate the score of each doc
+    # compute the cosine similarity between queyVector and each docVector:
+    # HINT: you can use the dot product because in case of normalized vectors it corresponds to the cosine similarity
+    # see np.dot
+
+    doc_scores = [[np.dot(curDocVec, query_vector), doc] for doc, curDocVec in doc_vectors.items()]
+    doc_scores.sort(reverse=True)
+    print(doc_scores)
+    result_docs = [x[1] for x in doc_scores]
+    #print document titles instead if document id's
+    #result_docs=[ title_index[x] for x in result_docs ]
+    if len(result_docs) == 0:
+        print("No results found, try again")
+        query = input()
+        docs = search_tf_idf(query, index)
+    #print ('\n'.join(result_docs), '\n')
+    return result_docs
+
+def search_tf_idf(query, index, idf, tf):
+    """
+    output is the list of documents that contain any of the query terms.
+    So, we will get the list of documents for each query term, and take the union of them.
+    """
+    query = build_terms(query)
+    docs = set()
+    for term in query:
+        try:
+            # store in term_docs the ids of the docs that contain "term"
+            term_docs = [posting[0] for posting in index[term]]
+
+            # docs = docs Union term_docs
+            docs |= set(term_docs)
+        except:
+            #term is not in index
+            pass
+    docs = list(docs)
+    ranked_docs = rank_documents(query, docs, index, idf, tf)
+    #print( ranked_docs)
+    return ranked_docs
+
+def generate_ranking(query, index):
+    return 0
+
 def scatter_plot(df):
     # Apply T-SNE for dimensionality reduction
     tsne = TSNE(n_components=2, random_state=42)
@@ -124,49 +187,116 @@ def scatter_plot(df):
     plt.savefig("./scatter_plot")
     plt.close()  # Close the plot to release resources
 
-def retrieve_top_k_tweets(query, index, tf_idf_scores, k=10):
-    query_terms = build_terms(query)  # Tokenize the query
-    query_tf_idf = Counter(query_terms)
 
-    # Calculate TF-IDF scores for the query
-    query_scores = {term: query_tf_idf[term] * np.log(len(index) / len(index[term])) for term in query_terms}
 
-    # Compute cosine similarity between query and tweets
-    cosine_similarities = {}
-    for term, score in query_scores.items():
-        for tweet_id, tf_idf in tf_idf_scores.get(term, {}).items():
-            if tweet_id not in cosine_similarities:
-                cosine_similarities[tweet_id] = 0
-            cosine_similarities[tweet_id] += score * tf_idf
-
-    # Rank tweets based on cosine similarity
-    ranked_tweets = [tweet_id for tweet_id, similarity in sorted(cosine_similarities.items(),
-                                                                 key=lambda x: x[1], reverse=True)[:k]]
-
-    return ranked_tweets
-
-if "name" == "__main__":
+def main():
     file_path = ''
     start_time = time.time()
-    lines = []
-    index = create_index(lines)
+    docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
+    with open(docs_path) as fp:
+        lines = fp.readlines()
+    lines = [l.strip().replace(' +', ' ') for l in lines]
+    print("There are ", len(lines), " tweets")
+
+    index, tf, df, idf = create_index(lines)
     print("Total time to create the index: {} seconds".format(np.round(time.time() - start_time, 2)))
 
     print("Index results for the term 'putin': {}\n".format(index['putin']))
     print("First 10 Index results for the term 'putin': \n{}".format(index['putin'][:10]))
 
-    query = "putin Russia"
+    print("Insert your query (i.e.: Computer Science):\n")
+    query = input()
+    ranked_docs = search_tf_idf(query, index, tf, idf)
+    top = 10
 
-    # Calculate TF-IDF scores
-    tf_idf_scores = calculate_tf_idf(index)
+    print("\n======================\nTop {} results out of {} for the searched query:\n".format(top, len(ranked_docs)))
+    for d_id in ranked_docs[:top]:
+        print("page_id= {} ".format(d_id))
+    # query = "putin Russia"
 
-    # Retrieve top k relevant tweets for the query
-    k = 10  # Number of top tweets to retrieve
-    relevant_tweets = retrieve_top_k_tweets(query, index, tf_idf_scores, k)
+    # # Calculate TF-IDF scores
+    # tf_idf_scores = calculate_tf_idf(index)
 
-    # Print the relevant tweets
-    print("Top {} Relevant Tweets for the Query '{}':".format(k, query))
-    for tweet_id in relevant_tweets:
-        print("Tweet ID:", tweet_id) 
-    df = vector_index(lines)
-    scatter_plot(df)
+    # # Retrieve top k relevant tweets for the query
+    # k = 10  # Number of top tweets to retrieve
+    # relevant_tweets = retrieve_top_k_tweets(query, index, tf_idf_scores, k)
+    # print(relevant_tweets)
+    # # Print the relevant tweets
+    # print("Top {} Relevant Tweets for the Query '{}':".format(k, query))
+    # for tweet_id in relevant_tweets:
+    #     print("Tweet ID:", tweet_id) 
+    # # df = vector_index(lines)
+    # #scatter_plot(df)
+
+main()
+
+
+
+
+# def vector_index(lines):
+#     """
+#     input: list of paragraphs
+#     output: dataframe mapping each paragraph to its embedding
+#     """
+#     # from sklearn.cluster import AgglomerativeClustering
+#     embeddings = model.encode(lines)
+#     df = pd.DataFrame(
+#         {"tweet": lines[i]["id"], "vector_representation": embeddings[i]}
+#         for i in range(len(embeddings))
+#     )
+#     return df
+
+# def obtain_similarity(query, df, k):
+#     """
+#     arguments:
+#         - query: word or sentence to compare
+#         - df: dataframe mapping paragraphs to embeddings
+#         - k: number of selected similar paragraphs
+#     output: list of paragraphs relevant for the query and the position in the datframe at which they are
+#     """
+
+#     query_embedding = model.encode(query)
+#     df["similarity"] = df["vector_representation"].apply(
+#         lambda x: cosine_similarity(x, query_embedding)
+#     )
+#     results = df.sort_values("similarity", ascending=False, ignore_index=True)
+#     top_k = results["tweet"][1:k]
+#     top_k = list(top_k)
+#     ## Find positions of the top_k in df
+#     positions = df.loc[df["tweet"].isin(top_k)].index
+#     return top_k, positions
+
+# def calculate_tf_idf(index):
+#     tf_idf_scores = {}
+#     total_tweets = len(index.keys())
+
+#     tf = defaultdict(list)
+#     df = defaultdict(int)  
+
+#     # Calculate IDF for each term
+#     idf = {term: np.log(total_tweets / len(postings)) for term, postings in index.items()}
+#     norm = 0
+#     for term, posting in index.items():
+#         # posting will contain the list of positions for current term in current document.
+#         # posting ==> [current_doc, [list of positions]]
+#         # you can use it to infer the frequency of current term.
+#         norm += len(posting[1]) ** 2
+#     norm = math.sqrt(norm)
+    
+#     for term, posting in index.items():
+#             # append the tf for current term (tf = term frequency in current doc/norm)
+#             tf[term].append(np.round(len(posting[1]) / norm, 4)) ## SEE formula (1) above
+#             #increment the document frequency of current term (number of documents containing the current term)
+#             df[term] += 1 # increment DF for current term
+
+
+#     # Calculate TF-IDF scores for each term in each tweet
+#     for term, postings in index.items():
+#         tf_idf_scores[term] = {}
+#         for posting in postings:
+#             tweet_id, positions = posting[0], posting[1]
+#             tf = len(positions)
+#             tf_idf = tf * idf[term]
+#             tf_idf_scores[term][tweet_id] = tf_idf
+
+#     return tf_idf_scores
