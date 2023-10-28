@@ -1,3 +1,4 @@
+
 import time
 import json
 from collections import Counter, defaultdict
@@ -68,7 +69,7 @@ def create_index(lines):
         #calculate the tf(dividing the term frequency by the above computed norm) and df weights
         for term, posting in current_page_index.items():
             # append the tf for current term (tf = term frequency in current doc/norm)
-            tf[term].append(np.round(len(posting[1]) / norm, 4)) ## SEE formula (1) above
+            tf[term].append([posting[0], np.round(len(posting[1]) / norm, 4)]) ## SEE formula (1) above
             #increment the document frequency of current term (number of documents containing the current term)
             df[term] += 1 # increment DF for current term
 
@@ -81,7 +82,26 @@ def create_index(lines):
             idf[term] = np.round(np.log(float(num_documents / df[term])), 4)
     return index, tf, df, idf
 
-def rank_documents(terms, docs, index, idf, tf):
+
+def generate_ranking(query, index, tf, idf):
+    # TODO: Generate rankings
+    return 0
+
+def scatter_plot(df):
+    # Apply T-SNE for dimensionality reduction
+    tsne = TSNE(n_components=2, random_state=42)
+    tweet_tsne = tsne.fit_transform(df.vector_representation.values())
+
+    # Plot the tweets in a scatter plot
+    plt.figure(figsize=(10, 8))
+    plt.scatter(tweet_tsne[:, 0], tweet_tsne[:, 1])
+    plt.title('T-SNE Visualization of Tweets')
+    plt.xlabel('T-SNE Component 1')
+    plt.ylabel('T-SNE Component 2')
+    plt.savefig("./scatter_plot")
+    plt.close()  # Close the plot to release resources
+
+def rank_documents(terms, docs, index, idf, tf, tweet_ids):
     """
     Perform the ranking of the results of a search based on the tf-idf weights
 
@@ -105,17 +125,12 @@ def rank_documents(terms, docs, index, idf, tf):
     # compute the norm for the query tf
     query_terms_count = collections.Counter(terms)  # get the frequency of each term in the query.
     # Example: collections.Counter(["hello","hello","world"]) --> Counter({'hello': 2, 'world': 1})
-    #HINT: use when computing tf for query_vector
-
+   
     query_norm = la.norm(list(query_terms_count.values()))
 
     for termIndex, term in enumerate(terms):  #termIndex is the index of the term in the query
         if term not in index:
             continue
-
-        # TODO: check how to vectorize the query
-        # query_vector[termIndex]=idf[term]  # original
-        ## Compute tf*idf(normalize TF as done with documents)
         query_vector[termIndex] = query_terms_count[term] / query_norm * idf[term]
 
         # Generate doc_vectors for matching docs
@@ -128,7 +143,8 @@ def rank_documents(terms, docs, index, idf, tf):
 
             #tf[term][0] will contain the tf of the term "term" in the doc 26
             if doc in docs:
-                doc_vectors[doc][termIndex] = tf[term][doc_index] * idf[term]  # TODO: check if multiply for idf
+        
+                doc_vectors[doc][termIndex] = tf[term][doc_index][1] * idf[term]
 
     # Calculate the score of each doc
     # compute the cosine similarity between queyVector and each docVector:
@@ -137,7 +153,7 @@ def rank_documents(terms, docs, index, idf, tf):
 
     doc_scores = [[np.dot(curDocVec, query_vector), doc] for doc, curDocVec in doc_vectors.items()]
     doc_scores.sort(reverse=True)
-    print(doc_scores)
+    
     result_docs = [x[1] for x in doc_scores]
     #print document titles instead if document id's
     #result_docs=[ title_index[x] for x in result_docs ]
@@ -146,9 +162,10 @@ def rank_documents(terms, docs, index, idf, tf):
         query = input()
         docs = search_tf_idf(query, index)
     #print ('\n'.join(result_docs), '\n')
-    return result_docs
+    return result_docs[:10]
 
-def search_tf_idf(query, index, idf, tf):
+
+def search_tf_idf(query, index, idf, tf, tweet_ids):
     """
     output is the list of documents that contain any of the query terms.
     So, we will get the list of documents for each query term, and take the union of them.
@@ -166,28 +183,9 @@ def search_tf_idf(query, index, idf, tf):
             #term is not in index
             pass
     docs = list(docs)
-    ranked_docs = rank_documents(query, docs, index, idf, tf)
+    ranked_docs = rank_documents(query, docs, index, idf, tf, tweet_ids)
     #print( ranked_docs)
     return ranked_docs
-
-def generate_ranking(query, index):
-    return 0
-
-def scatter_plot(df):
-    # Apply T-SNE for dimensionality reduction
-    tsne = TSNE(n_components=2, random_state=42)
-    tweet_tsne = tsne.fit_transform(df.vector_representation.values())
-
-    # Plot the tweets in a scatter plot
-    plt.figure(figsize=(10, 8))
-    plt.scatter(tweet_tsne[:, 0], tweet_tsne[:, 1])
-    plt.title('T-SNE Visualization of Tweets')
-    plt.xlabel('T-SNE Component 1')
-    plt.ylabel('T-SNE Component 2')
-    plt.savefig("./scatter_plot")
-    plt.close()  # Close the plot to release resources
-
-
 
 def main():
     file_path = ''
@@ -197,21 +195,35 @@ def main():
         lines = fp.readlines()
     lines = [l.strip().replace(' +', ' ') for l in lines]
     print("There are ", len(lines), " tweets")
+    
+    # Process lines to create a list of tweet IDs
+    tweet_ids = [json.loads(line)["id"] for line in lines]
+    tweet_ids_df = pd.DataFrame({'tweet_id': tweet_ids, 'position': list(range(len(tweet_ids)))})
 
     index, tf, df, idf = create_index(lines)
-    print("Total time to create the index: {} seconds".format(np.round(time.time() - start_time, 2)))
+    # Save the index, tf, df, and idf to JSON files
+    #save_index_to_json(index, tf, df, idf, 'index.json', 'tf.json', 'df.json', 'idf.json')
+    # print(tf.keys())
+    # print(tf['putin'])
+    # Example usage:
+    query = 'putin and the war'
+    results = search_tf_idf(query, index, idf, tf, tweet_ids_df)
+    print(results)
 
-    print("Index results for the term 'putin': {}\n".format(index['putin']))
-    print("First 10 Index results for the term 'putin': \n{}".format(index['putin'][:10]))
 
-    print("Insert your query (i.e.: Computer Science):\n")
-    query = input()
-    ranked_docs = search_tf_idf(query, index, tf, idf)
-    top = 10
+    # Load the index, tf, df, and idf from JSON files
+    # loaded_index, loaded_tf, loaded_df, loaded_idf = load_index_from_json('index.json', 'tf.json', 'df.json', 'idf.json')
+    # 
+    # print("Total time to create the index: {} seconds".format(np.round(time.time() - start_time, 2)))
 
-    print("\n======================\nTop {} results out of {} for the searched query:\n".format(top, len(ranked_docs)))
-    for d_id in ranked_docs[:top]:
-        print("page_id= {} ".format(d_id))
+    # print("Index results for the term 'putin': {}\n".format(index['putin']))
+    # print("First 10 Index results for the term 'putin': \n{}".format(index['putin'][:10]))
+   
+    # query = ["putin", "war", "ukraine"]  # Replace with your query terms
+    # k = 5  # Number of most relevant tweets to retrieve
+    # result_tweets = search_tf_idf(query, tf, df, idf, index, k)
+    # print(result_tweets)
+
     # query = "putin Russia"
 
     # # Calculate TF-IDF scores
@@ -300,3 +312,5 @@ main()
 #             tf_idf_scores[term][tweet_id] = tf_idf
 
 #     return tf_idf_scores
+
+# %%
