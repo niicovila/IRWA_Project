@@ -83,11 +83,6 @@ def create_index(lines):
             idf[term] = np.round(np.log(float(num_documents / df[term])), 4)
     return index, tf, df, idf
 
-
-def generate_ranking(query, index, tf, idf):
-    # TODO: Generate rankings
-    return 0
-
 def scatter_plot(df):
     # Apply T-SNE for dimensionality reduction
     tsne = TSNE(n_components=2, random_state=42)
@@ -117,16 +112,12 @@ def rank_documents(terms, docs, index, idf, tf):
     Returns:
     Print the list of ranked documents
     """
-
-    # I'm interested only on the element of the docVector corresponding to the query terms
-    # The remaining elements would become 0 when multiplied to the query_vector
     doc_vectors = defaultdict(lambda: [0] * len(terms)) # I call doc_vectors[k] for a nonexistent key k, the key-value pair (k,[0]*len(terms)) will be automatically added to the dictionary
     query_vector = [0] * len(terms)
 
-    # compute the norm for the query tf
+
     query_terms_count = collections.Counter(terms)  # get the frequency of each term in the query.
-    # Example: collections.Counter(["hello","hello","world"]) --> Counter({'hello': 2, 'world': 1})
-   
+
     query_norm = la.norm(list(query_terms_count.values()))
 
     for termIndex, term in enumerate(terms):  #termIndex is the index of the term in the query
@@ -144,25 +135,18 @@ def rank_documents(terms, docs, index, idf, tf):
 
             #tf[term][0] will contain the tf of the term "term" in the doc 26
             if doc in docs:
-        
                 doc_vectors[doc][termIndex] = tf[term][doc_index][1] * idf[term]
-
-    # Calculate the score of each doc
-    # compute the cosine similarity between queyVector and each docVector:
-    # HINT: you can use the dot product because in case of normalized vectors it corresponds to the cosine similarity
-    # see np.dot
 
     doc_scores = [[np.dot(curDocVec, query_vector), doc] for doc, curDocVec in doc_vectors.items()]
     doc_scores.sort(reverse=True)
     
     result_docs = [x[1] for x in doc_scores]
-    #print document titles instead if document id's
-    #result_docs=[ title_index[x] for x in result_docs ]
+    
     if len(result_docs) == 0:
         print("No results found, try again")
         query = input()
         docs = search_tf_idf(query, index)
-    #print ('\n'.join(result_docs), '\n')
+
     return result_docs[:10]
 
 
@@ -189,36 +173,6 @@ def search_tf_idf(query, index, idf, tf):
     return ranked_docs
 
 def main():
-    #%%
-
-    import time
-    import json
-    from collections import Counter, defaultdict
-    from array import array
-    from nltk.stem import PorterStemmer
-    from nltk.corpus import stopwords
-    import math
-    import numpy as np
-    import collections
-    from numpy import linalg as la
-    import string
-    from openai.embeddings_utils import cosine_similarity
-    import re
-    import random
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from torch import cosine_similarity
-    from wordcloud import WordCloud
-    from sentence_transformers import SentenceTransformer
-    import nltk
-    from sklearn.manifold import TSNE
-    import matplotlib.pyplot as plt
-    nltk.download('stopwords')
-    from utils import build_terms, read_tweets
-    model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-
-    file_path = ''
-    start_time = time.time()
     docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
     with open(docs_path) as fp:
         lines = fp.readlines()
@@ -228,57 +182,41 @@ def main():
     # Process lines to create a list of tweet IDs
     tweet_ids = [json.loads(line)["id"] for line in lines]
     tweets_texts = [json.loads(line)["full_text"] for line in lines]
-    tweet_ids_df = pd.DataFrame({'tweet_id': tweet_ids, 'doc': [f'doc_{i}' for i in range(len(tweet_ids))]})
     tweet_text = pd.DataFrame({'tweet_id': tweet_ids, 'text': tweets_texts})
     index, tf, df, idf = create_index(lines)
 
-
-    # Set the size of the random subset
-    # subset_size = 137
-
-    # random_tweet_ids = random.sample(list(tweet_ids_df['tweet_id']), subset_size)
-    # random_tweet_ids_df = tweet_ids_df[tweet_ids_df['tweet_id'].isin(random_tweet_ids)]
-    # random_tweet_text_df = tweet_text[tweet_text['tweet_id'].isin(random_tweet_ids)]
-    # random_subset_df = pd.merge(random_tweet_ids_df, random_tweet_text_df, on='tweet_id')
-    # random_subset_df.to_csv('random_subset_tweets.csv', index=False)
-    # random_subset_df.head()
  
     query = 'putin and the war'
     results = search_tf_idf(query, index, idf, tf)
 
     relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
     print(relevant_tweets["text"])
- 
+
+        # Define test queries
+    test_queries = [
+        "Russian military intervention in Ukraine",
+        "Impact of sanctions on Russia",
+        "Ukraine conflict timeline",
+        "International response to Russia-Ukraine war",
+        "Humanitarian crisis in Ukraine"
+    ]
+    query_results = []
+    # Evaluate search engine using test queries
+    for query in test_queries:
+        print(f"Query: {query}")
+        results = search_tf_idf(query, index, idf, tf)
+        relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
+        print(relevant_tweets["text"])
+        print("=" * 50)
+        query_results.append(f"Query: {query}\n")
+        query_results.extend(relevant_tweets["text"].tolist())
+        query_results.append("=" * 50 + "\n")
+
+    # Save results to a text file
+    with open('search_results.txt', 'w', encoding='utf-8') as file:
+        file.writelines(query_results)
 
 
-    # Load the index, tf, df, and idf from JSON files
-    # loaded_index, loaded_tf, loaded_df, loaded_idf = load_index_from_json('index.json', 'tf.json', 'df.json', 'idf.json')
-    # 
-    # print("Total time to create the index: {} seconds".format(np.round(time.time() - start_time, 2)))
-
-    # print("Index results for the term 'putin': {}\n".format(index['putin']))
-    # print("First 10 Index results for the term 'putin': \n{}".format(index['putin'][:10]))
-   
-    # query = ["putin", "war", "ukraine"]  # Replace with your query terms
-    # k = 5  # Number of most relevant tweets to retrieve
-    # result_tweets = search_tf_idf(query, tf, df, idf, index, k)
-    # print(result_tweets)
-
-    # query = "putin Russia"
-
-    # # Calculate TF-IDF scores
-    # tf_idf_scores = calculate_tf_idf(index)
-
-    # # Retrieve top k relevant tweets for the query
-    # k = 10  # Number of top tweets to retrieve
-    # relevant_tweets = retrieve_top_k_tweets(query, index, tf_idf_scores, k)
-    # print(relevant_tweets)
-    # # Print the relevant tweets
-    # print("Top {} Relevant Tweets for the Query '{}':".format(k, query))
-    # for tweet_id in relevant_tweets:
-    #     print("Tweet ID:", tweet_id) 
-    # # df = vector_index(lines)
-    # #scatter_plot(df)
 
 main()
 
@@ -317,40 +255,3 @@ main()
 #     ## Find positions of the top_k in df
 #     positions = df.loc[df["tweet"].isin(top_k)].index
 #     return top_k, positions
-
-# def calculate_tf_idf(index):
-#     tf_idf_scores = {}
-#     total_tweets = len(index.keys())
-
-#     tf = defaultdict(list)
-#     df = defaultdict(int)  
-
-#     # Calculate IDF for each term
-#     idf = {term: np.log(total_tweets / len(postings)) for term, postings in index.items()}
-#     norm = 0
-#     for term, posting in index.items():
-#         # posting will contain the list of positions for current term in current document.
-#         # posting ==> [current_doc, [list of positions]]
-#         # you can use it to infer the frequency of current term.
-#         norm += len(posting[1]) ** 2
-#     norm = math.sqrt(norm)
-    
-#     for term, posting in index.items():
-#             # append the tf for current term (tf = term frequency in current doc/norm)
-#             tf[term].append(np.round(len(posting[1]) / norm, 4)) ## SEE formula (1) above
-#             #increment the document frequency of current term (number of documents containing the current term)
-#             df[term] += 1 # increment DF for current term
-
-
-#     # Calculate TF-IDF scores for each term in each tweet
-#     for term, postings in index.items():
-#         tf_idf_scores[term] = {}
-#         for posting in postings:
-#             tweet_id, positions = posting[0], posting[1]
-#             tf = len(positions)
-#             tf_idf = tf * idf[term]
-#             tf_idf_scores[term][tweet_id] = tf_idf
-
-#     return tf_idf_scores
-
-# %%
