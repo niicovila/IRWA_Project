@@ -17,13 +17,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from torch import cosine_similarity
 from wordcloud import WordCloud
-from sentence_transformers import SentenceTransformer
+#from sentence_transformers import SentenceTransformer
 import nltk
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 nltk.download('stopwords')
 from utils import build_terms, read_tweets
-model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+#model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
 def create_index(lines):
     """
@@ -173,7 +173,9 @@ def search_tf_idf(query, index, idf, tf):
     return ranked_docs
 
 def main():
-    docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
+    #docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
+    
+    docs_path = '/Users/guill/OneDrive/Escritorio/Rus_Ukr_war_data.json'
     with open(docs_path) as fp:
         lines = fp.readlines()
     lines = [l.strip().replace(' +', ' ') for l in lines]
