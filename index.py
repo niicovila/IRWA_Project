@@ -22,6 +22,8 @@ from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 nltk.download('stopwords')
 from utils import build_terms, read_tweets
+from gensim.models import Word2Vec
+
 
 def create_index(lines):
     """
@@ -369,7 +371,7 @@ def main():
     baseline_queries = [
         "Tank Kharkiv",
         "Nord Stream pipeline",
-        "Annexation territories Russia"
+        "Annexation territories"
     ]
 
     custom_queries = [
@@ -377,7 +379,7 @@ def main():
         "Impact of sanctions on Russia",
         "Russian propaganda in the conflict",
         "International response to Russia-Ukraine war",
-        "Humanitarian crisis in Ukraine"
+        "Humanitarian crisis"
     ]
 
     k = 10
@@ -402,6 +404,26 @@ def main():
     print(f'\nMean Average Precision of Custom Queries: {MAP_custom /n_custom }')
     print(f'Mean Reciprocal Rank of Custom Queries: {MRR_custom /n_custom }')
 
+    tweets = []
+    for line in lines:
+        tweet = json.loads(line)
+        terms_in_tweet = build_terms(tweet["full_text"])
+        tweets.append(terms_in_tweet)
+    
+    model = Word2Vec(sentences=tweets, workers=4, min_count=1, window=10, sample=1e-3)
+    tweet_vectors = []
+    for terms in tweets:
+        vectorized_terms = [model.wv[word] for word in terms if word in model.wv]
+        if vectorized_terms:
+            tweet_vector = np.mean(vectorized_terms, axis=0)  # Average the word vectors to get a single vector per tweet
+            tweet_vectors.append(tweet_vector)
 
+    X = np.array(tweet_vectors)
+    print(len(X))
+    tsne = TSNE(n_components=2)
+    X_tsne = tsne.fit_transform(X)
 
+    # Plot the t-SNE representation
+    plt.scatter(X_tsne[:, 0], X_tsne[:, 1])
+    plt.show()
 main()
