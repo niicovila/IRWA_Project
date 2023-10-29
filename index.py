@@ -11,19 +11,17 @@ import collections
 from numpy import linalg as la
 import string
 from openai.embeddings_utils import cosine_similarity
-import re
+import csv
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
 from torch import cosine_similarity
 from wordcloud import WordCloud
-#from sentence_transformers import SentenceTransformer
 import nltk
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 nltk.download('stopwords')
 from utils import build_terms, read_tweets
-#model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
 def create_index(lines):
     """
@@ -83,6 +81,172 @@ def create_index(lines):
             idf[term] = np.round(np.log(float(num_documents / df[term])), 4)
     return index, tf, df, idf
 
+def select_docs(data, query_id):
+    subset = []
+    ground_truths = []
+
+    for line in data:
+        doc, q_id, label = line.split(',')
+        if q_id == query_id:
+            subset.append(doc)
+            if label == '1':
+                ground_truths.append(1)
+            else:
+                ground_truths.append(0)
+        elif label == '1':
+            subset.append(doc)
+            ground_truths.append(0)
+
+    return subset, ground_truths
+
+def read_csv(path):
+    with open(path, 'r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Salta el encabezado
+        data = [",".join(row) for row in reader]
+    return data
+
+def precision_at_k(doc_score, y_score, k=10):
+    """
+    Parameters
+    ----------
+    doc_score: Ground truth (true relevance labels).
+    y_score: Predicted scores.
+    k : number of doc to consider.
+
+    Returns
+    -------
+    precision @k : float
+
+    """
+    order = np.argsort(y_score)[::-1]
+    doc_score = np.take(doc_score, order[:k])
+    relevant = sum(doc_score == 1)
+    return float(relevant) / k
+
+def recall_at_k(doc_score, y_score, k=10):
+    """
+    Parameters
+    ----------
+    doc_score: Ground truth (true relevance labels).
+    y_score: Predicted scores.
+    k : number of doc to consider.
+
+    Returns
+    -------
+    precision @k : float
+
+    """
+    r = np.sum(doc_score)
+    order = np.argsort(y_score)[::-1]
+    doc_score = np.take(doc_score, order[:k])
+    relevant = sum(doc_score == 1)
+    return float(relevant) / r
+
+def avg_precision_at_k(doc_score, y_score, k=10):
+    """
+    Parameters
+    ----------
+    doc_score: Ground truth (true relevance labels).
+    y_score: Predicted scores.
+    k : number of doc to consider.
+
+    Returns
+    -------
+    average precision @k : float
+    """
+    gtp = np.sum(doc_score)
+    order = np.argsort(y_score)[::-1]
+    doc_score = np.take(doc_score, order[:k])
+    ## if all documents are not relevant
+    if gtp == 0:
+        return 0
+    n_relevant_at_i = 0
+    prec_at_i = 0
+    for i in range(len(doc_score)):
+        if doc_score[i] == 1:
+            n_relevant_at_i += 1
+            prec_at_i += n_relevant_at_i / (i + 1)
+    return prec_at_i / gtp
+
+def dcg_at_k(doc_score, y_score, k=10):
+    order = np.argsort(y_score)[::-1]  # get the list of indexes of the predicted score sorted in descending order.
+    doc_score = np.take(doc_score, order[:k])  # sort the actual relevance label of the documents based on predicted score(hint: np.take) and take first k.
+    gain = 2 ** doc_score - 1  # Compute gain (use formula 7 above)
+    discounts = np.log2(np.arange(len(doc_score)) + 2)  # Compute denominator
+    return np.sum(gain / discounts)  #return dcg@k
+
+
+def ndcg_at_k(doc_score, y_score, k=10):
+    dcg_max = dcg_at_k(doc_score, doc_score, k)
+    if not dcg_max:
+        return 0
+    return np.round(dcg_at_k(doc_score, y_score, k) / dcg_max, 4)
+
+def rr_at_k(doc_score, y_score, k=10):
+    """
+    Parameters
+    ----------
+    doc_score: Ground truth (true relevance labels).
+    y_score: Predicted scores.
+    k : number of doc to consider.
+
+    Returns
+    -------
+    Reciprocal Rank for qurrent query
+    """
+
+    order = np.argsort(y_score)[::-1]  # get the list of indexes of the predicted score sorted in descending order.
+    doc_score = np.take(doc_score, order[
+                             :k])  # sort the actual relevance label of the documents based on predicted score(hint: np.take) and take first k.
+    if np.sum(doc_score) == 0:  # if there are not relevant doument return 0
+        return 0
+    return 1 / (np.argmax(doc_score == 1) + 1)  # hint: to get the position of the first relevant document use "np.argmax"
+
+
+
+def evaluation(queries, i, lines, tweet_text, tweet_document_ids_map, k, path):
+    evaluation_data1 = read_csv(path)
+    docs, ground_truths = select_docs(evaluation_data1,f"Q{i}")
+
+    subset = [line for line in lines if tweet_document_ids_map[json.loads(line)["id"]] in(docs)]
+    subset = sorted(subset, key=lambda line: docs.index(tweet_document_ids_map[json.loads(line)["id"]]))
+ 
+    subset_tweets_ids = [json.loads(line)["id"] for line in subset]
+    subindex, subtf, subdf, subidf = create_index(subset)
+
+    results, scores = search_tf_idf(queries[i-1], subindex, subidf, subtf)
+    
+    y_scores = [scores[results.index(tweet)] if(tweet in results) else 0 for tweet in subset_tweets_ids]
+    relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
+
+    tweet_dict = {row["tweet_id"]: row["text"] for _, row in tweet_text.iterrows()}
+    relevant_tweets = [tweet_dict[tweet_id] for tweet_id in results]
+    file_path = f'relevant_text_q{i}.txt'
+    with open(file_path, 'w', encoding="utf-8") as file:
+        file.write("\n\n\n".join(relevant_tweets))
+
+    print(f'\nQuery {i}: {queries[i-1]}\n')
+
+    precision= precision_at_k(ground_truths, y_scores)
+    print(f'Precision at {k}: {precision}')
+
+    recall = recall_at_k(ground_truths, y_scores)
+    print(f'Recall at {k}: {recall}')
+
+    avg_precision = avg_precision_at_k(ground_truths, y_scores)
+    print(f'Average precision at {k}: {avg_precision}')
+
+    fscore = (2*recall*precision)/(recall+precision)
+    print(f'F1-Score at {k}:  {fscore}')
+
+    ndcg = ndcg_at_k(ground_truths, y_scores)
+    print(f'NDG at {k}:  {ndcg}')
+
+    rr = rr_at_k(ground_truths, y_scores)
+
+    return avg_precision, rr
+
 def scatter_plot(df):
     # Apply T-SNE for dimensionality reduction
     tsne = TSNE(n_components=2, random_state=42)
@@ -139,15 +303,16 @@ def rank_documents(terms, docs, index, idf, tf):
 
     doc_scores = [[np.dot(curDocVec, query_vector), doc] for doc, curDocVec in doc_vectors.items()]
     doc_scores.sort(reverse=True)
-    
+
     result_docs = [x[1] for x in doc_scores]
+    result_scores = [x[0] for x in doc_scores]
     
     if len(result_docs) == 0:
         print("No results found, try again")
         query = input()
         docs = search_tf_idf(query, index)
 
-    return result_docs[:10]
+    return result_docs, result_scores
 
 
 def search_tf_idf(query, index, idf, tf):
@@ -168,92 +333,75 @@ def search_tf_idf(query, index, idf, tf):
             #term is not in index
             pass
     docs = list(docs)
-    ranked_docs = rank_documents(query, docs, index, idf, tf)
-    #print( ranked_docs)
-    return ranked_docs
+    ranked_docs, scores = rank_documents(query, docs, index, idf, tf)
+    return ranked_docs, scores
+
 
 def main():
     #docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
-    
     docs_path = '/Users/guill/OneDrive/Escritorio/Rus_Ukr_war_data.json'
+
+    #ids_path = '/Users/nvila/Downloads/ids.csv'
+    ids_path = '/Users/guill/OneDrive/Escritorio/Rus_Ukr_war_data_ids.csv'
+
+    #ev1 = '/Users/nvila/Downloads/Evaluation_gt.csv'
+    #ev2 = '/Users/nvila/Downloads/evaluation_custom_queries.csv'
+
+    ev1 = '/Users/guill/OneDrive/Escritorio/Evaluation_gt.csv'
+    ev2 = '/Users/guill/OneDrive/Escritorio/evaluation_custom_queries.csv'
+
     with open(docs_path) as fp:
         lines = fp.readlines()
     lines = [l.strip().replace(' +', ' ') for l in lines]
-    print("There are ", len(lines), " tweets")
+
     
-    # Process lines to create a list of tweet IDs
-    tweet_ids = [json.loads(line)["id"] for line in lines]
-    tweets_texts = [json.loads(line)["full_text"] for line in lines]
-    tweet_text = pd.DataFrame({'tweet_id': tweet_ids, 'text': tweets_texts})
-    index, tf, df, idf = create_index(lines)
 
- 
-    query = 'putin and the war'
-    results = search_tf_idf(query, index, idf, tf)
+    doc_ids = pd.read_csv(ids_path, sep='\t', header=None)
+    
+    doc_ids.columns = ["doc_id", "tweet_id"]
+    tweet_document_ids_map = {}
+    for index, row in doc_ids.iterrows():
+        tweet_document_ids_map[row['tweet_id']] = row['doc_id']
 
-    relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
-    print(relevant_tweets["text"])
+    tweet_text = pd.DataFrame({'tweet_id': [json.loads(line)["id"] for line in lines], 'text': [json.loads(line)["full_text"] for line in lines]})
 
-        # Define test queries
-    test_queries = [
-        "Russian military intervention in Ukraine",
+
+    baseline_queries = [
+        "Tank Kharkiv",
+        "Nord Stream pipeline",
+        "Annexation territories Russia"
+    ]
+
+    custom_queries = [
+        "Russian military intervention",
         "Impact of sanctions on Russia",
-        "Ukraine conflict timeline",
+        "Russian propaganda in the conflict",
         "International response to Russia-Ukraine war",
         "Humanitarian crisis in Ukraine"
     ]
-    query_results = []
-    # Evaluate search engine using test queries
-    for query in test_queries:
-        print(f"Query: {query}")
-        results = search_tf_idf(query, index, idf, tf)
-        relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
-        print(relevant_tweets["text"])
-        print("=" * 50)
-        query_results.append(f"Query: {query}\n")
-        query_results.extend(relevant_tweets["text"].tolist())
-        query_results.append("=" * 50 + "\n")
 
-    # Save results to a text file
-    with open('search_results.txt', 'w', encoding='utf-8') as file:
-        file.writelines(query_results)
+    k = 10
+
+    n_baseline = len(baseline_queries)
+    MAP_baseline = 0
+    MRR_baseline = 0
+    for i in range(len(baseline_queries)):
+        AP_baseline, RR_baseline = evaluation(baseline_queries, i+1, lines, tweet_text, tweet_document_ids_map, k, path = ev1)
+        MAP_baseline += AP_baseline
+        MRR_baseline += RR_baseline
+    print(f'\nMean Average Precision of Baseline Queries: {MAP_baseline/n_baseline}')
+    print(f'Mean Reciprocal Rank of Baseline Queries: {MRR_baseline/n_baseline}')
+    
+    n_custom = len(custom_queries)
+    MAP_custom = 0
+    MRR_custom = 0
+    for i in range(len(custom_queries)):
+        AP_custom , RR_custom  = evaluation(custom_queries, i+1, lines, tweet_text, tweet_document_ids_map, k, path = ev2)
+        MAP_custom  += AP_custom 
+        MRR_custom  += RR_custom 
+    print(f'\nMean Average Precision of Custom Queries: {MAP_custom /n_custom }')
+    print(f'Mean Reciprocal Rank of Custom Queries: {MRR_custom /n_custom }')
 
 
 
 main()
-
-
-
-
-# def vector_index(lines):
-#     """
-#     input: list of paragraphs
-#     output: dataframe mapping each paragraph to its embedding
-#     """
-#     # from sklearn.cluster import AgglomerativeClustering
-#     embeddings = model.encode(lines)
-#     df = pd.DataFrame(
-#         {"tweet": lines[i]["id"], "vector_representation": embeddings[i]}
-#         for i in range(len(embeddings))
-#     )
-#     return df
-
-# def obtain_similarity(query, df, k):
-#     """
-#     arguments:
-#         - query: word or sentence to compare
-#         - df: dataframe mapping paragraphs to embeddings
-#         - k: number of selected similar paragraphs
-#     output: list of paragraphs relevant for the query and the position in the datframe at which they are
-#     """
-
-#     query_embedding = model.encode(query)
-#     df["similarity"] = df["vector_representation"].apply(
-#         lambda x: cosine_similarity(x, query_embedding)
-#     )
-#     results = df.sort_values("similarity", ascending=False, ignore_index=True)
-#     top_k = results["tweet"][1:k]
-#     top_k = list(top_k)
-#     ## Find positions of the top_k in df
-#     positions = df.loc[df["tweet"].isin(top_k)].index
-#     return top_k, positions
