@@ -11,7 +11,7 @@ import collections
 from numpy import linalg as la
 import string
 from openai.embeddings_utils import cosine_similarity
-import re
+import csv
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -83,6 +83,75 @@ def create_index(lines):
             idf[term] = np.round(np.log(float(num_documents / df[term])), 4)
     return index, tf, df, idf
 
+def select_docs(data, query_id):
+    subset = []
+    ground_truths = []
+
+    for line in data:
+        doc, q_id, label = line.split(',')
+        if q_id == query_id:
+            subset.append(doc)
+            if label == '1':
+                ground_truths.append(1)
+            else:
+                ground_truths.append(0)
+        elif label == '1':
+            subset.append(doc)
+            ground_truths.append(0)
+
+    return subset, ground_truths
+
+def read_csv(path):
+    with open(path, 'r') as file:
+        reader = csv.reader(file)
+        next(reader)  # Salta el encabezado
+        data = [",".join(row) for row in reader]
+    return data
+
+def precision_at_k(doc_score, y_score, k=10):
+    """
+    Parameters
+    ----------
+    doc_score: Ground truth (true relevance labels).
+    y_score: Predicted scores.
+    k : number of doc to consider.
+
+    Returns
+    -------
+    precision @k : float
+
+    """
+    order = np.argsort(y_score)[::-1]
+    doc_score = np.take(doc_score, order[:k])
+    relevant = sum(doc_score == 1)
+    return float(relevant) / k
+
+
+def evaluation(queries, i, lines, tweet_text, tweet_document_ids_map, path):
+    evaluation_data1 = read_csv(path)
+    docs, ground_truths = select_docs(evaluation_data1,f"Q{i}")
+
+    subset = [line for line in lines if tweet_document_ids_map[json.loads(line)["id"]] in(docs)]
+    subset = sorted(subset, key=lambda line: docs.index(tweet_document_ids_map[json.loads(line)["id"]]))
+ 
+    subset_tweets_ids = [json.loads(line)["id"] for line in subset]
+    subindex, subtf, subdf, subidf = create_index(subset)
+
+    results, scores = search_tf_idf(queries[i-1], subindex, subidf, subtf)
+    
+    y_scores = [scores[results.index(tweet)] if(tweet in results) else 0 for tweet in subset_tweets_ids]
+    relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
+
+    tweet_dict = {row["tweet_id"]: row["text"] for _, row in tweet_text.iterrows()}
+    relevant_tweets = [tweet_dict[tweet_id] for tweet_id in results]
+    file_path = f'relevant_text_q{i}.txt'
+    with open(file_path, 'w', encoding="utf-8") as file:
+        file.write("\n\n\n".join(relevant_tweets))
+
+    precision= precision_at_k(ground_truths, y_scores)
+    print(f'Query: {queries[i-1]}; Precision: {precision}')
+    return precision
+
 def scatter_plot(df):
     # Apply T-SNE for dimensionality reduction
     tsne = TSNE(n_components=2, random_state=42)
@@ -139,15 +208,16 @@ def rank_documents(terms, docs, index, idf, tf):
 
     doc_scores = [[np.dot(curDocVec, query_vector), doc] for doc, curDocVec in doc_vectors.items()]
     doc_scores.sort(reverse=True)
-    
+
     result_docs = [x[1] for x in doc_scores]
+    result_scores = [x[0] for x in doc_scores]
     
     if len(result_docs) == 0:
         print("No results found, try again")
         query = input()
         docs = search_tf_idf(query, index)
 
-    return result_docs[:10]
+    return result_docs, result_scores
 
 
 def search_tf_idf(query, index, idf, tf):
@@ -168,90 +238,44 @@ def search_tf_idf(query, index, idf, tf):
             #term is not in index
             pass
     docs = list(docs)
-    ranked_docs = rank_documents(query, docs, index, idf, tf)
-    #print( ranked_docs)
-    return ranked_docs
+    ranked_docs, scores = rank_documents(query, docs, index, idf, tf)
+    return ranked_docs, scores
+
 
 def main():
     docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
     with open(docs_path) as fp:
         lines = fp.readlines()
     lines = [l.strip().replace(' +', ' ') for l in lines]
-    print("There are ", len(lines), " tweets")
+
+    ids_path = '/Users/nvila/Downloads/ids.csv'
+    doc_ids = pd.read_csv(ids_path, sep='\t', header=None)
     
-    # Process lines to create a list of tweet IDs
-    tweet_ids = [json.loads(line)["id"] for line in lines]
-    tweets_texts = [json.loads(line)["full_text"] for line in lines]
-    tweet_text = pd.DataFrame({'tweet_id': tweet_ids, 'text': tweets_texts})
-    index, tf, df, idf = create_index(lines)
+    doc_ids.columns = ["doc_id", "tweet_id"]
+    tweet_document_ids_map = {}
+    for index, row in doc_ids.iterrows():
+        tweet_document_ids_map[row['tweet_id']] = row['doc_id']
 
- 
-    query = 'putin and the war'
-    results = search_tf_idf(query, index, idf, tf)
+    tweet_text = pd.DataFrame({'tweet_id': [json.loads(line)["id"] for line in lines], 'text': [json.loads(line)["full_text"] for line in lines]})
 
-    relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
-    print(relevant_tweets["text"])
 
-        # Define test queries
-    test_queries = [
+    baseline_queries = [
+        "Tank Kharkiv",
+        "Nord Stream pipeline",
+        "Annexation territories Russia"
+    ]
+
+    custom_queries = [
         "Russian military intervention in Ukraine",
         "Impact of sanctions on Russia",
-        "Ukraine conflict timeline",
+        "Russian propaganda in the Ukraine conflict",
         "International response to Russia-Ukraine war",
         "Humanitarian crisis in Ukraine"
     ]
-    query_results = []
-    # Evaluate search engine using test queries
-    for query in test_queries:
-        print(f"Query: {query}")
-        results = search_tf_idf(query, index, idf, tf)
-        relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
-        print(relevant_tweets["text"])
-        print("=" * 50)
-        query_results.append(f"Query: {query}\n")
-        query_results.extend(relevant_tweets["text"].tolist())
-        query_results.append("=" * 50 + "\n")
+    ev1 = '/Users/nvila/Downloads/Evaluation_gt.csv'
+    ev2 = '/Users/nvila/Downloads/evaluation_custom_queries.csv'
 
-    # Save results to a text file
-    with open('search_results.txt', 'w', encoding='utf-8') as file:
-        file.writelines(query_results)
-
-
+    b = [evaluation(baseline_queries, i+1, lines, tweet_text, tweet_document_ids_map, path = ev1) for i in range(len(baseline_queries))]
+    c = [evaluation(custom_queries, i+1, lines, tweet_text, tweet_document_ids_map, path = ev2) for i in range(len(custom_queries))]
 
 main()
-
-
-
-
-# def vector_index(lines):
-#     """
-#     input: list of paragraphs
-#     output: dataframe mapping each paragraph to its embedding
-#     """
-#     # from sklearn.cluster import AgglomerativeClustering
-#     embeddings = model.encode(lines)
-#     df = pd.DataFrame(
-#         {"tweet": lines[i]["id"], "vector_representation": embeddings[i]}
-#         for i in range(len(embeddings))
-#     )
-#     return df
-
-# def obtain_similarity(query, df, k):
-#     """
-#     arguments:
-#         - query: word or sentence to compare
-#         - df: dataframe mapping paragraphs to embeddings
-#         - k: number of selected similar paragraphs
-#     output: list of paragraphs relevant for the query and the position in the datframe at which they are
-#     """
-
-#     query_embedding = model.encode(query)
-#     df["similarity"] = df["vector_representation"].apply(
-#         lambda x: cosine_similarity(x, query_embedding)
-#     )
-#     results = df.sort_values("similarity", ascending=False, ignore_index=True)
-#     top_k = results["tweet"][1:k]
-#     top_k = list(top_k)
-#     ## Find positions of the top_k in df
-#     positions = df.loc[df["tweet"].isin(top_k)].index
-#     return top_k, positions
