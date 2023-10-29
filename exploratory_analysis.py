@@ -152,6 +152,6 @@ def exploratory_analysis(lines):
     plt.close()  # Close the plot to release resources
 
 
-if "name"=='__main__':
+if __name__ == '__main__':
     file_path = ''
     exploratory_analysis(read_tweets(file_path))
