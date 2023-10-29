@@ -12,6 +12,7 @@ from numpy import linalg as la
 import string
 from openai.embeddings_utils import cosine_similarity
 import re
+import random
 import pandas as pd
 import matplotlib.pyplot as plt
 from torch import cosine_similarity
@@ -101,7 +102,7 @@ def scatter_plot(df):
     plt.savefig("./scatter_plot")
     plt.close()  # Close the plot to release resources
 
-def rank_documents(terms, docs, index, idf, tf, tweet_ids):
+def rank_documents(terms, docs, index, idf, tf):
     """
     Perform the ranking of the results of a search based on the tf-idf weights
 
@@ -165,7 +166,7 @@ def rank_documents(terms, docs, index, idf, tf, tweet_ids):
     return result_docs[:10]
 
 
-def search_tf_idf(query, index, idf, tf, tweet_ids):
+def search_tf_idf(query, index, idf, tf):
     """
     output is the list of documents that contain any of the query terms.
     So, we will get the list of documents for each query term, and take the union of them.
@@ -183,11 +184,39 @@ def search_tf_idf(query, index, idf, tf, tweet_ids):
             #term is not in index
             pass
     docs = list(docs)
-    ranked_docs = rank_documents(query, docs, index, idf, tf, tweet_ids)
+    ranked_docs = rank_documents(query, docs, index, idf, tf)
     #print( ranked_docs)
     return ranked_docs
 
 def main():
+    #%%
+
+    import time
+    import json
+    from collections import Counter, defaultdict
+    from array import array
+    from nltk.stem import PorterStemmer
+    from nltk.corpus import stopwords
+    import math
+    import numpy as np
+    import collections
+    from numpy import linalg as la
+    import string
+    from openai.embeddings_utils import cosine_similarity
+    import re
+    import random
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from torch import cosine_similarity
+    from wordcloud import WordCloud
+    from sentence_transformers import SentenceTransformer
+    import nltk
+    from sklearn.manifold import TSNE
+    import matplotlib.pyplot as plt
+    nltk.download('stopwords')
+    from utils import build_terms, read_tweets
+    model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
+
     file_path = ''
     start_time = time.time()
     docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
@@ -198,17 +227,28 @@ def main():
     
     # Process lines to create a list of tweet IDs
     tweet_ids = [json.loads(line)["id"] for line in lines]
-    tweet_ids_df = pd.DataFrame({'tweet_id': tweet_ids, 'position': list(range(len(tweet_ids)))})
-
+    tweets_texts = [json.loads(line)["full_text"] for line in lines]
+    tweet_ids_df = pd.DataFrame({'tweet_id': tweet_ids, 'doc': [f'doc_{i}' for i in range(len(tweet_ids))]})
+    tweet_text = pd.DataFrame({'tweet_id': tweet_ids, 'text': tweets_texts})
     index, tf, df, idf = create_index(lines)
-    # Save the index, tf, df, and idf to JSON files
-    #save_index_to_json(index, tf, df, idf, 'index.json', 'tf.json', 'df.json', 'idf.json')
-    # print(tf.keys())
-    # print(tf['putin'])
-    # Example usage:
+
+
+    # Set the size of the random subset
+    # subset_size = 137
+
+    # random_tweet_ids = random.sample(list(tweet_ids_df['tweet_id']), subset_size)
+    # random_tweet_ids_df = tweet_ids_df[tweet_ids_df['tweet_id'].isin(random_tweet_ids)]
+    # random_tweet_text_df = tweet_text[tweet_text['tweet_id'].isin(random_tweet_ids)]
+    # random_subset_df = pd.merge(random_tweet_ids_df, random_tweet_text_df, on='tweet_id')
+    # random_subset_df.to_csv('random_subset_tweets.csv', index=False)
+    # random_subset_df.head()
+ 
     query = 'putin and the war'
-    results = search_tf_idf(query, index, idf, tf, tweet_ids_df)
-    print(results)
+    results = search_tf_idf(query, index, idf, tf)
+
+    relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
+    print(relevant_tweets["text"])
+ 
 
 
     # Load the index, tf, df, and idf from JSON files
