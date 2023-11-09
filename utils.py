@@ -66,15 +66,16 @@ def get_tweet_info(tweet):
     likes = tweet['favorite_count']
     retweets = tweet['retweet_count']
     url = f"https://twitter.com/user_name/status/{tweet_id}"
+    tweet_info = f"Date: {date}\nText: {text}\nHashtags: {hashtags}\nLikes: {likes}\nRetweets: {retweets}\nURL: {url}\n{'-'*50}"
     
-    return {
+    return ({
         'Tweet': text,
         'Date': date,
         'Hashtags': hashtags,
         'Likes': likes,
         'Retweets': retweets,
         'Url': url
-    }
+    }, tweet_info)
 
 def get_tweet(tweet_id, tweets):
     for tweet in tweets:
@@ -82,6 +83,7 @@ def get_tweet(tweet_id, tweets):
         if tweet['id'] == (tweet_id):
             return get_tweet_info(tweet)
     return None
+
 
 
     
