@@ -1,6 +1,6 @@
 import time
 import json
-from collections import Counter, defaultdict
+from collections import defaultdict
 from array import array
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
@@ -9,20 +9,16 @@ import numpy as np
 import collections
 from numpy import linalg as la
 import string
-from openai.embeddings_utils import cosine_similarity
 import csv
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
-from torch import cosine_similarity
-from wordcloud import WordCloud
 import nltk
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
-nltk.download('stopwords')
 from utils import build_terms, read_tweets
 from gensim.models import Word2Vec
-
+nltk.download('stopwords')
 
 def create_index(lines):
     """

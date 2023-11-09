@@ -7,11 +7,9 @@ from nltk.corpus import stopwords
 import math
 import numpy as np
 import collections
-from numpy import linalg as la
 import string
 import re
 import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 import nltk
 nltk.download('stopwords')
 
@@ -59,3 +57,31 @@ def read_tweets(file_path):
     lines = [l.strip().replace(' +', ' ') for l in lines]
     print("There are ", len(lines), " tweets")
     return lines
+
+def get_tweet_info(tweet):
+    tweet_id = tweet['id_str']
+    date = tweet['created_at']
+    text = tweet['full_text']
+    hashtags = [tag['text'] for tag in tweet['entities']['hashtags']]
+    likes = tweet['favorite_count']
+    retweets = tweet['retweet_count']
+    url = f"https://twitter.com/user_name/status/{tweet_id}"
+    
+    return {
+        'Tweet': text,
+        'Date': date,
+        'Hashtags': hashtags,
+        'Likes': likes,
+        'Retweets': retweets,
+        'Url': url
+    }
+
+def get_tweet(tweet_id, tweets):
+    for tweet in tweets:
+        tweet = json.loads(tweet)
+        if tweet['id'] == (tweet_id):
+            return get_tweet_info(tweet)
+    return None
+
+
+    
