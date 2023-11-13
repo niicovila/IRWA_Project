@@ -322,20 +322,24 @@ def search_tf_idf(query, index, idf, tf):
     So, we will get the list of documents for each query term, and take the union of them.
     """
     query = build_terms(query)
-    docs = set()
-    for term in query:
+    if query:
+        docs = set([posting[0] for posting in index[query[0]]])
+
+    # Iterate over the remaining terms
+    for term in query[1:]:
         try:
             # store in term_docs the ids of the docs that contain "term"
             term_docs = [posting[0] for posting in index[term]]
 
-            # docs = docs Union term_docs
-            docs |= set(term_docs)
+            # docs = docs Intersection term_docs
+            docs &= set(term_docs)
         except:
             #term is not in index
             pass
     docs = list(docs)
     ranked_docs, scores = rank_documents(query, docs, index, idf, tf)
     return ranked_docs, scores
+
 def plot_tnse(lines):
     tweets = []
     for line in lines:

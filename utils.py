@@ -46,7 +46,8 @@ def build_terms(line):
 
     line=  line.lower()       ## Transform in lowercase
     line=  line.split()       ## Tokenize the text to get a list of terms
-    line = [term.strip(string.punctuation) if term[0] != '#' else term for term in line] #Identify hashtags and delete the symbol
+    #line = [term.strip(string.punctuation) if term[0] != '#' else term[1:] for term in line] #Identify hashtags and delete the symbol
+    line = [term.strip(string.punctuation) for term in line] #Remove puntuaction signs, # included
     line = [word for word in line if word not in stop_words]  ## Eliminate the stopwords (HINT: use List Comprehension)
     line = [stemmer.stem(word) for word in line]  ## perform stemming (HINT: use List Comprehension)
     return line
