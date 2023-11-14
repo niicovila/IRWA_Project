@@ -9,7 +9,6 @@ import numpy as np
 import collections
 import string
 import re
-import matplotlib.pyplot as plt
 import nltk
 nltk.download('stopwords')
 

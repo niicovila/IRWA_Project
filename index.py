@@ -277,6 +277,7 @@ def rank_documents(terms, docs, index, idf, tf):
     Returns:
     Print the list of ranked documents
     """
+    
     doc_vectors = defaultdict(lambda: [0] * len(terms)) # I call doc_vectors[k] for a nonexistent key k, the key-value pair (k,[0]*len(terms)) will be automatically added to the dictionary
     query_vector = [0] * len(terms)
 
