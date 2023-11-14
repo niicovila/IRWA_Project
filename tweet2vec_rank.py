@@ -49,7 +49,7 @@ def rank_tweets_cosine(query, tweets_df, model, k):
 def get_matching_tweets(query, tweets, index):
     query_terms = build_terms(query)
     matching_tweet_ids = None
-    
+    print(query_terms)
     # Find tweets that contain all the query terms
     for term in query_terms:
         if term in index:
@@ -58,10 +58,11 @@ def get_matching_tweets(query, tweets, index):
                 matching_tweet_ids = tweet_ids_with_term
             else:
                 matching_tweet_ids = matching_tweet_ids.intersection(tweet_ids_with_term)
-        else:
-            # If any term is not found in the index, there won't be matching tweets
-            matching_tweet_ids = set()
-            break
+                print(matching_tweet_ids)
+        # else:
+        #     # If any term is not found in the index, there won't be matching tweets
+        #     matching_tweet_ids = set()
+        #     break
 
     matching_tweet_ids = list(matching_tweet_ids)
     tweet_texts = []
