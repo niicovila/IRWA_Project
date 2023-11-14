@@ -1,12 +1,6 @@
-import time
 import json
-from collections import defaultdict
-from array import array
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
-import math
-import numpy as np
-import collections
 import string
 import re
 import nltk
@@ -67,7 +61,7 @@ def get_tweet_info(tweet):
     retweets = tweet['retweet_count']
     url = f"https://twitter.com/user_name/status/{tweet_id}"
     tweet_info = f"Date: {date}\nText: {text}\nHashtags: {hashtags}\nLikes: {likes}\nRetweets: {retweets}\nURL: {url}\n{'-'*50}"
-    
+
     return ({
         'Tweet': text,
         'Date': date,
@@ -83,7 +77,3 @@ def get_tweet(tweet_id, tweets):
         if tweet['id'] == (tweet_id):
             return get_tweet_info(tweet)
     return None
-
-
-
-    

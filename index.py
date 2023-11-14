@@ -31,14 +31,14 @@ def create_index(lines):
     index - the inverted index (implemented through a Python dictionary) containing terms as keys and the corresponding
     list of documents where these keys appears in (and the positions) as values.
     """
-    tf = defaultdict(list) 
-    df = defaultdict(int)  
+    tf = defaultdict(list)
+    df = defaultdict(int)
     idf = defaultdict(float)
 
     index = defaultdict(list)
     num_documents = len(lines)
     for line in lines:  # Remember, lines contain all documents: article-id | article-title | article-body
-       
+
         line = json.loads(line)
         line_arr = line["full_text"]
         tweet_id = line["id"]  # Get the tweet ID
@@ -51,7 +51,7 @@ def create_index(lines):
                 current_page_index[term][tweet_id].append(position)
 
             except:
-               
+
                 current_page_index[term] = [tweet_id, array('I', [position])]
 
         norm = 0
@@ -208,12 +208,12 @@ def evaluation(queries, i, lines, tweet_text, tweet_document_ids_map, k, custom,
 
     subset = [line for line in lines if tweet_document_ids_map[json.loads(line)["id"]] in(docs)]
     subset = sorted(subset, key=lambda line: docs.index(tweet_document_ids_map[json.loads(line)["id"]]))
- 
+
     subset_tweets_ids = [json.loads(line)["id"] for line in subset]
     subindex, subtf, subdf, subidf = create_index(subset)
 
     results, scores = search_tf_idf(queries[i-1], subindex, subidf, subtf)
-    
+
     y_scores = [scores[results.index(tweet)] if(tweet in results) else 0 for tweet in subset_tweets_ids]
     relevant_tweets = tweet_text[tweet_text["tweet_id"].isin(results)]
 
@@ -222,7 +222,7 @@ def evaluation(queries, i, lines, tweet_text, tweet_document_ids_map, k, custom,
 
     if(custom):
         file_path = f'text_custom_q{i}.txt'
-    else: 
+    else:
         file_path = f'text_baseline_q{i}.txt'
     with open(file_path, 'w', encoding="utf-8") as file:
         file.write("\n\n\n".join(relevant_tweets))
@@ -277,7 +277,7 @@ def rank_documents(terms, docs, index, idf, tf):
     Returns:
     Print the list of ranked documents
     """
-    
+
     doc_vectors = defaultdict(lambda: [0] * len(terms)) # I call doc_vectors[k] for a nonexistent key k, the key-value pair (k,[0]*len(terms)) will be automatically added to the dictionary
     query_vector = [0] * len(terms)
 
@@ -308,7 +308,7 @@ def rank_documents(terms, docs, index, idf, tf):
 
     result_docs = [x[1] for x in doc_scores]
     result_scores = [x[0] for x in doc_scores]
-    
+
     if len(result_docs) == 0:
         print("No results found, try again")
         query = input()
@@ -367,10 +367,10 @@ def plot_tnse(lines):
 
 def main():
     docs_path = '/Users/nvila/Downloads/Rus_Ukr_war_data.json'
-    # docs_path = '/Users/guill/OneDrive/Escritorio/Rus_Ukr_war_data.json'
+    #docs_path = '/content/Rus_Ukr_war_data.json'
 
     ids_path = '/Users/nvila/Downloads/ids.csv'
-    # ids_path = '/Users/guill/OneDrive/Escritorio/Rus_Ukr_war_data_ids.csv'
+    #ids_path = '/Users/guill/OneDrive/Escritorio/Rus_Ukr_war_data_ids.csv'
 
     ev1 = '/Users/nvila/Downloads/Evaluation_gt.csv'
     ev2 = '/Users/nvila/Downloads/evaluation_custom_queries.csv'
@@ -382,10 +382,10 @@ def main():
         lines = fp.readlines()
     lines = [l.strip().replace(' +', ' ') for l in lines]
 
-    
+
 
     doc_ids = pd.read_csv(ids_path, sep='\t', header=None)
-    
+
     doc_ids.columns = ["doc_id", "tweet_id"]
     tweet_document_ids_map = {}
     for index, row in doc_ids.iterrows():
@@ -419,14 +419,14 @@ def main():
         MRR_baseline += RR_baseline
     print(f'\nMean Average Precision of Baseline Queries: {MAP_baseline/n_baseline}')
     print(f'Mean Reciprocal Rank of Baseline Queries: {MRR_baseline/n_baseline}')
-    
+
     n_custom = len(custom_queries)
     MAP_custom = 0
     MRR_custom = 0
     for i in range(len(custom_queries)):
         AP_custom , RR_custom  = evaluation(custom_queries, i+1, lines, tweet_text, tweet_document_ids_map, k, custom=True, path = ev2)
-        MAP_custom  += AP_custom 
-        MRR_custom  += RR_custom 
+        MAP_custom  += AP_custom
+        MRR_custom  += RR_custom
     print(f'\nMean Average Precision of Custom Queries: {MAP_custom /n_custom }')
     print(f'Mean Reciprocal Rank of Custom Queries: {MRR_custom /n_custom }')
 
