@@ -47,9 +47,9 @@ Open Web app in your Browser:
 
 - For data collection and storage, an in-memory storage mechanism was chosen. This decision was made to simplify the replication process bypassing the complexities associated with setting up and managing a database. Custom data models for Sessions, Clicks, and Requests were developed within the Python and Flask framework, reflecting a preference for a straightforward and accessible development environment conducive to rapid prototyping. While this approach was ideal for demonstration and educational purposes, it was recognized that a persistent database solution would be more appropriate for real-world applications where data durability and scalability are crucial.
 
-  ## Importance of Chosen Metrics
+  ### Importance of Chosen Metrics
 
-  1. Session Data (User IP, Location, User Agent): Collecting session data is fundamental for understanding user demographics and behavior. Information like user IP, geographical location, and user agent provides insights into the diversity of the user base, their geographical distribution, and the devices or browsers used. This data is crucial for optimizing the application for different user segments and ensuring compatibility across various platforms.
+1. Session Data (User IP, Location, User Agent): Collecting session data is fundamental for understanding user demographics and behavior. Information like user IP, geographical location, and user agent provides insights into the diversity of the user base, their geographical distribution, and the devices or browsers used. This data is crucial for optimizing the application for different user segments and ensuring compatibility across various platforms.
 
 2. Request Data (Queries, Timestamps): Tracking search queries and their timestamps enables the analysis of search trends, popular search terms, and user engagement over time. Understanding what users are searching for is vital for refining the search algorithm and ensuring that it aligns with user needs and expectations. Timestamp data helps in analyzing peak usage times, which can inform infrastructure scaling decisions and maintenance scheduling.
 
