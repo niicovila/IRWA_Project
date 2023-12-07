@@ -62,4 +62,6 @@ The selection of metrics and the motivation behind data collection in the Flask 
 3. Click Data (Document Clicks, Related Queries, Ranking): Monitoring which documents are clicked, the associated queries, and their rankings in the search results yields valuable insights into the effectiveness of the search algorithm. It helps in assessing whether the most relevant and useful results are being presented to the users. This data is also instrumental in improving search result ranking algorithms.
 
 
+### Bonus:
 
+We implemented geolocalization based on the IP, but given that we are currently running the server locally it wasn't of much use.
