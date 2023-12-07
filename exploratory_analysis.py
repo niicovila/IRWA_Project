@@ -8,8 +8,6 @@ import math
 import numpy as np
 import collections
 from numpy import linalg as la
-import string
-import re
 import spacy
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
