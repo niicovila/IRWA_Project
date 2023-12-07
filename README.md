@@ -47,7 +47,13 @@ Open Web app in your Browser:
 
 - For data collection and storage, an in-memory storage mechanism was chosen. This decision was made to simplify the replication process bypassing the complexities associated with setting up and managing a database. Custom data models for Sessions, Clicks, and Requests were developed within the Python and Flask framework, reflecting a preference for a straightforward and accessible development environment conducive to rapid prototyping. While this approach was ideal for demonstration and educational purposes, it was recognized that a persistent database solution would be more appropriate for real-world applications where data durability and scalability are crucial.
 
+- Session management was enhanced to ensure accurate and reliable user tracking. This involved creating unique session IDs for each user visit and implementing logic to prevent the creation of duplicate session entries for the same user. The use of UUIDs guarantees the uniqueness of each session, which is critical for tracking user activities accurately. The rationale behind this was to avoid the inflation of user session counts and ensure that the web analytics data reflected genuine user interactions. In conclusion, the development choices made in the project were carefully considered to provide a balance between educational value, ease of implementation, and the potential for offering meaningful insights into user behavior and application performance. The result was a functional Flask web application prototype, equipped with fundamental web analytics capabilities, and serving as a solid foundation for more advanced developments.
+
+
   ### Importance of Chosen Metrics
+
+The selection of metrics and the motivation behind data collection in the Flask web application were grounded in the objectives of enhancing user experience, improving search functionality, and providing meaningful insights into user behavior.
+  
 
 1. Session Data (User IP, Location, User Agent): Collecting session data is fundamental for understanding user demographics and behavior. Information like user IP, geographical location, and user agent provides insights into the diversity of the user base, their geographical distribution, and the devices or browsers used. This data is crucial for optimizing the application for different user segments and ensuring compatibility across various platforms.
 
